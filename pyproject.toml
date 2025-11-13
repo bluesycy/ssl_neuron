@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ssl_neuron"
+version = "1.1"
+description = "SSL-Neuron contains the code to the paper 'Self-supervised Representation Learning of Neuronal Morphologies'"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+
+authors = [
+  { name = "Marissa Weis", email = "marissa.weis@bethgelab.org" }
+]
+
+classifiers = [
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3"
+]
+
+dependencies = [
+  "allensdk",
+  "numpy",
+  "tqdm",
+  "seaborn",
+  "matplotlib",
+  "networkx",
+  "scipy",
+  "scikit-learn",
+  "torch",
+  "torchvision"
+]
+
+[project.urls]
+"Homepage" = "https://eckerlab.org/code/weis2021b/"
+
+[tool.setuptools.packages.find]
+where = ["."]
