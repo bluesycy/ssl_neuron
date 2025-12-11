@@ -28,7 +28,7 @@
     },
     "trainer": {
         "ckpt_dir": "../ckpts/",
-        "save_ckpt_every": 50,
+        "save_ckpt_every": 500,
         "seed": null
     }
 }
