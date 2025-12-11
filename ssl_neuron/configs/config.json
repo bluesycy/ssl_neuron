@@ -10,15 +10,15 @@
         "teacher_temp": 0.06
     },
     "data": {
-        "class": "allen",
-        "path": "../data/",
+        "class": "roli",
+        "path": "data/",
         "n_nodes": 200,
         "feat_dim": 3,
         "batch_size": 64,
         "num_workers": 6,
         "jitter_var": 1,
         "translate_var": 10,
-        "rotation_axis": "y",
+        "rotation_axis": "xyz",
         "n_drop_branch": 10
     },
     "optimizer": {
@@ -27,7 +27,7 @@
         "exp_decay": 0.5
     },
     "trainer": {
-        "ckpt_dir": "../ckpts/",
+        "ckpt_dir": "ckpts/",
         "save_ckpt_every": 500,
         "seed": null
     }
