@@ -4,7 +4,7 @@ import torch.optim as optim
 from ssl_neuron.utils import AverageMeter, compute_eig_lapl_torch_batch
 
 class Trainer(object):
-    def __init__(self, config, model, dataloaders):
+    def __init__(self, config, model, dataloaders, resume_path=None):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.model = model.to(self.device)
         self.config = config
@@ -23,6 +23,11 @@ class Trainer(object):
         self.lr_decay = self.max_iter // 5
         
         self.optimizer = optim.Adam(list(self.model.parameters()), lr=0)
+        self.curr_iter = 0
+        self.start_epoch = 0
+
+        if resume_path is not None:
+            self._load_checkpoint(resume_path)
         
         
     def set_lr(self): 
@@ -38,8 +43,7 @@ class Trainer(object):
         
 
     def train(self):     
-        self.curr_iter = 0
-        epoch = 0
+        epoch = self.start_epoch
         while self.curr_iter < self.max_iter:
             # Run one epoch.
             self._train_epoch(epoch)
@@ -82,6 +86,40 @@ class Trainer(object):
 
     def _save_checkpoint(self, epoch):
         filename = 'ckpt_{}.pt'.format(epoch)
-        PATH = os.path.join(self.ckpt_dir, filename)
-        torch.save(self.model.state_dict(), PATH)
+        path = os.path.join(self.ckpt_dir, filename)
+        payload = {
+            'model': self.model.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'epoch': epoch,
+            'curr_iter': self.curr_iter
+        }
+        torch.save(payload, path)
         print('Save model after epoch {} as {}.'.format(epoch, filename))
+
+
+    def _load_checkpoint(self, resume_path):
+        if not os.path.isfile(resume_path):
+            raise FileNotFoundError('Checkpoint not found: {}'.format(resume_path))
+
+        print('Resume from checkpoint {}'.format(resume_path))
+        checkpoint = torch.load(resume_path, map_location=self.device)
+
+        if isinstance(checkpoint, dict) and 'model' in checkpoint:
+            self.model.load_state_dict(checkpoint['model'])
+
+            optimizer_state = checkpoint.get('optimizer')
+            if optimizer_state:
+                self.optimizer.load_state_dict(optimizer_state)
+                for state in self.optimizer.state.values():
+                    for k, v in state.items():
+                        if isinstance(v, torch.Tensor):
+                            state[k] = v.to(self.device, non_blocking=True)
+
+            self.curr_iter = checkpoint.get('curr_iter', 0)
+            last_epoch = checkpoint.get('epoch', -1)
+            self.start_epoch = max(last_epoch + 1, 0)
+        else:
+            self.model.load_state_dict(checkpoint)
+            self.curr_iter = 0
+            self.start_epoch = 0
+            print('Loaded weights only; optimizer and iteration state reset.')

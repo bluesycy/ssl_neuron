@@ -6,6 +6,7 @@ from ssl_neuron.datasets import build_dataloader
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', help='Path to config file.', type=str, default='./configs/config.json')
+parser.add_argument('--resume', help='Path to checkpoint to resume from.', type=str, default=None)
 
 
 def main(args):
@@ -18,7 +19,7 @@ def main(args):
 
     # build model 
     model = create_model(config)
-    trainer = Trainer(config, model, [train_loader, val_loader])
+    trainer = Trainer(config, model, [train_loader, val_loader], resume_path=args.resume)
 
     print('Start training.')
     trainer.train()
