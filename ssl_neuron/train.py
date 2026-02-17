@@ -46,11 +46,11 @@ class Trainer(object):
         epoch = self.start_epoch
         while self.curr_iter < self.max_iter:
             # Run one epoch.
-            self._train_epoch(epoch)
+            loss = self._train_epoch(epoch)
 
             if epoch % self.save_every == 0:
                 # Save checkpoint.
-                self._save_checkpoint(epoch)
+                self._save_checkpoint(epoch, loss)
             
             epoch += 1
 
@@ -82,16 +82,18 @@ class Trainer(object):
             self.curr_iter += 1
 
         print('Epoch {} | Loss {:.4f}'.format(epoch, losses.avg))
+        return losses.avg
 
 
-    def _save_checkpoint(self, epoch):
+    def _save_checkpoint(self, epoch, loss):
         filename = 'ckpt_{}.pt'.format(epoch)
         path = os.path.join(self.ckpt_dir, filename)
         payload = {
             'model': self.model.state_dict(),
             'optimizer': self.optimizer.state_dict(),
             'epoch': epoch,
-            'curr_iter': self.curr_iter
+            'curr_iter': self.curr_iter,
+            'loss': loss
         }
         torch.save(payload, path)
         print('Save model after epoch {} as {}.'.format(epoch, filename))
