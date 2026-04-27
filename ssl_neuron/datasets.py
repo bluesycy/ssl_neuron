@@ -29,6 +29,9 @@ class GraphDataset(Dataset):
         self.n_drop_branch = config['data']['n_drop_branch']
         self.translate_var = config['data']['translate_var']
         self.n_nodes = config['data']['n_nodes']
+        # When True, keep the 4-dim one-hot type alongside xyz (radius is dropped).
+        # Defaults to False to preserve backward compatibility with old checkpoints.
+        self.use_type = config['data'].get('use_type', False)
 
         # Load cell ids.
         cell_ids = list(np.load(Path(data_path, f'{mode}_ids.npy')))
@@ -59,7 +62,13 @@ class GraphDataset(Dataset):
                 soma_id = subsampled2new[soma_id]
 
                 # Accumulate features of subsampled nodes.
-                features = features[list(subsampled2new.keys()), :3]
+                # Saved features are (N, 8): xyz, radius, then 4-dim type one-hot.
+                # Skip radius (col 3); optionally keep the type one-hot (cols 4:8).
+                if self.use_type:
+                    cols = [0, 1, 2, 4, 5, 6, 7]
+                else:
+                    cols = [0, 1, 2]
+                features = features[np.ix_(list(subsampled2new.keys()), cols)]
 
                 leaf_branch_nodes = get_leaf_branch_nodes(neighbors)
                 # Using the distances we can infer the direction of an edge.

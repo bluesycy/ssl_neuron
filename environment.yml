@@ -170,7 +170,7 @@ dependencies:
       - simpleitk==2.5.2
       - simplejson==3.20.2
       - sqlalchemy==2.0.44
-      - ssl-neuron==1.1
+      - -e /home/chuyu/ssl_neuron
       - statsmodels==0.14.5
       - sympy==1.14.0
       - tables==3.10.2

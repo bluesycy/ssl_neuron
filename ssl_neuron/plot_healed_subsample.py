@@ -24,6 +24,76 @@ def build_neighbor_map(df):
     return adjacency
 
 
+def prune_axon_nodes(df, axon_type=2, drop_types=(0,)):
+    """Remove axon subtrees and `drop_types` nodes from an SWC.
+
+    A neuron's SWC is a tree rooted at the soma, so anything downstream of
+    an axon node is also considered axonal and is dropped. Nodes whose type
+    is in `drop_types` (by default only the SWC 'undefined' slot 0) are also
+    removed. Surviving nodes keep their original parent when it survived; if
+    their parent was deleted, they are re-parented to the nearest surviving
+    ancestor so the result is still a single tree rooted at the soma.
+
+    Note: if the SWC parent pointers form a geometric spanning tree rather
+    than a compartment-aware tree, legitimate dendrites can end up as
+    descendants of axon nodes and get dropped here too. Check the
+    pre/post node counts — if too much is lost, reconsider the input SWC's
+    parent-pointer semantics.
+    """
+    df = df.copy()
+    df[['id', 'type', 'parent']] = df[['id', 'type', 'parent']].astype(int)
+
+    type_map = dict(zip(df['id'], df['type']))
+    parent_map = dict(zip(df['id'], df['parent']))
+    drop_types = set(drop_types)
+
+    # Walk each node's ancestry; delete if self or any ancestor is axon, or if
+    # self type is in drop_types. Memoize the verdict per node.
+    verdict = {}  # id -> True if should be deleted
+
+    def should_delete(node):
+        if node in verdict:
+            return verdict[node]
+        path = []
+        cur = node
+        while cur != -1 and cur not in verdict:
+            path.append(cur)
+            t = type_map.get(cur)
+            if t == axon_type or t in drop_types:
+                for p in path:
+                    verdict[p] = True
+                return True
+            cur = parent_map.get(cur, -1)
+
+        inherited = verdict.get(cur, False) if cur != -1 else False
+        for p in path:
+            verdict[p] = inherited
+        return inherited
+
+    for node_id in df['id']:
+        should_delete(int(node_id))
+
+    keep_mask = df['id'].map(lambda i: not verdict.get(int(i), False))
+    pruned = df[keep_mask].copy()
+
+    # Re-parent any survivor whose parent was deleted to the nearest surviving
+    # ancestor (in practice always the soma, since axon/drop subtrees were
+    # fully removed — but guard anyway in case of disconnected inputs).
+    kept_ids = set(pruned['id'].astype(int).tolist())
+
+    def first_surviving_ancestor(node):
+        p = parent_map.get(node, -1)
+        while p != -1 and p not in kept_ids:
+            p = parent_map.get(p, -1)
+        return p
+
+    pruned['parent'] = pruned['id'].map(lambda i: (
+        int(parent_map[int(i)]) if int(parent_map[int(i)]) in kept_ids or parent_map[int(i)] == -1
+        else first_surviving_ancestor(int(i))
+    ))
+    return pruned.reset_index(drop=True)
+
+
 def subsample_swc(df, max_nodes=5000, soma_id=None):
     """Contract an SWC morphology down to at most max_nodes nodes while keeping the soma."""
     if max_nodes is None or len(df) <= max_nodes:
@@ -114,6 +184,8 @@ def plot_swc_3d_plotly(
     save_subsampled=False,
     subsample_output_dir=None,
     subsample_suffix='_subsampled.swc',
+    prune_axon=False,
+    axon_type=2,
 ):
     if not isinstance(swc_paths, list):
         swc_paths = [swc_paths]
@@ -130,6 +202,15 @@ def plot_swc_3d_plotly(
     skeleton_colors = ['darkblue', 'darkred', 'darkgreen', 'orange',
                        'purple', 'darkcyan', 'indigo', 'chocolate']
 
+    # color_mode='type': one trace per compartment type, named color per type.
+    TYPE_COLORS = {
+        1: ('soma', 'black'),
+        2: ('axon', 'crimson'),
+        3: ('dendrite', 'royalblue'),
+        7: ('synapse', 'orange'),
+        0: ('unknown', 'gray'),
+    }
+
     for neuron_idx, swc_path in enumerate(swc_paths):
 
         if verbose:
@@ -141,9 +222,15 @@ def plot_swc_3d_plotly(
             sep=' ',
             comment='#',
             header=None,
-            names=['id', 'type', 'x', 'y', 'z', 'r', 'parent']
+            names=['id', 'type', 'x', 'y', 'z', 'r', 'parent'],
         )
         df[['id', 'type', 'parent']] = df[['id', 'type', 'parent']].astype(int)
+
+        if prune_axon:
+            n_before = len(df)
+            df = prune_axon_nodes(df, axon_type=axon_type)
+            if verbose:
+                print(f"  Pruned axon nodes: {n_before} -> {len(df)} nodes.")
 
         if verbose:
             print(f"  Loaded {len(df)} nodes. Determining soma and subsampling...")
@@ -204,6 +291,7 @@ def plot_swc_3d_plotly(
 
         seg_x, seg_y, seg_z = [], [], []
         mid_distances = []
+        seg_types = []  # one entry per segment (child node's type)
 
         if trace_labels is not None and neuron_idx < len(trace_labels):
             trace_name = str(trace_labels[neuron_idx])
@@ -234,6 +322,7 @@ def plot_swc_3d_plotly(
             seg_y.extend([parent['y'], row['y'], None])
             seg_z.extend([parent['z'], row['z'], None])
             mid_distances.extend([mid_dist, mid_dist, mid_dist])
+            seg_types.append(int(row['type']))
 
         if len(seg_x) == 0:
             if verbose:
@@ -242,6 +331,31 @@ def plot_swc_3d_plotly(
 
         if verbose:
             print(f"  Adding trace '{trace_name}' with {len(seg_x)//3} segments.")
+
+        if color_mode == 'type':
+            # Emit one trace per compartment type so the legend is self-describing.
+            by_type = defaultdict(lambda: {'x': [], 'y': [], 'z': []})
+            for seg_idx, t in enumerate(seg_types):
+                base = seg_idx * 3
+                by_type[t]['x'].extend(seg_x[base:base + 3])
+                by_type[t]['y'].extend(seg_y[base:base + 3])
+                by_type[t]['z'].extend(seg_z[base:base + 3])
+
+            for t in sorted(by_type):
+                label, color = TYPE_COLORS.get(t, (f'type_{t}', 'gray'))
+                legend_name = f'{trace_name} · {label}' if len(swc_paths) > 1 else label
+                fig.add_trace(go.Scatter3d(
+                    x=by_type[t]['x'],
+                    y=by_type[t]['y'],
+                    z=by_type[t]['z'],
+                    mode='lines+markers',
+                    line=dict(color=color, width=2),
+                    marker=dict(size=marker_size, color=color),
+                    opacity=0.85,
+                    name=legend_name,
+                    showlegend=True,
+                ))
+            continue  # traces already added; skip the fig.add_trace(parent_line) below
 
         if color_mode == 'neuron':
             color_idx = neuron_idx % len(skeleton_colors)
@@ -370,44 +484,38 @@ def plot_swc_3d_plotly(
 
 
 if __name__ == "__main__":
-    scale = 2
-    if scale == 3:
-        scale_factors = (8, 8, 4)
-        anisotropy = (10*8, 10*8, 25*4)
-        scaletag = '3'
+    # SWC type column convention (from collaborator):
+    #   1 = soma, 2 = axon, 3 = dendrite, 7 = synapse (glia slot, repurposed)
+    # Soma is identified directly from type == 1 in subsample_swc / plot_swc_3d_plotly,
+    # so no external CSV lookup is needed.
+    base_dir = '/nfs/data8/chuyu/data/20230422_160839/connectome/skeletons/healed_syns_swc/swc'
 
-    elif scale == 2:
-        scale_factors = (4, 4, 2)
-        anisotropy = (10*4, 10*4, 25*2)
-        scaletag = '2'
+    # One file in this dir is a gzipped tar bundle that re-packs the same 467
+    # neurons already present as plain SWCs — skip it.
+    skip_names = {'neuron_136593859_scale2_healed_syns.swc'}
+    swc_paths = sorted(
+        p for p in glob.glob(os.path.join(base_dir, '*.swc'))
+        if os.path.basename(p) not in skip_names
+    )
+
+    # Toggle: also produce a parallel set of outputs with axon subtrees removed
+    # *before* subsampling, so the 3000-node budget goes entirely to dendrites.
+    prune_axon = False
+
+    if prune_axon:
+        html_output_root = os.path.join(base_dir, 'plots_html_no_axon')
+        subsampled_output_root = os.path.join(base_dir, 'subsampled_swcs_no_axon')
     else:
-        raise ValueError("Scale must be 2 or 3.")
-    
-    # change accordingly
-    base_dir = f'/nfs/data8/chuyu/data/20230422_160839/connectome/swc'
+        html_output_root = os.path.join(base_dir, 'plots_html')
+        subsampled_output_root = os.path.join(base_dir, 'subsampled_swcs')
 
-    swc_paths = glob.glob(f'{base_dir}/skeletons/*scale{scaletag}.swc') 
-    ariadne_csv = os.path.join(base_dir, 'Corvus_Proofreading_external - Ariadne_seeds_RoLi1_pc_matched_axonsplit_20251017_mod_8_class_degs.csv')
-
-    ariadne_df = pd.read_csv(ariadne_csv)
-
-    _agglo_ids = ariadne_df['agglo_id_orig'].values.astype(int)
-    _swc_paths = [f'{base_dir}/skeletons/neuron_{agglo_id}_scale{scaletag}.swc' for agglo_id in _agglo_ids]
-    
-    html_output_root = os.path.join(base_dir, 'plots_swc_mesh')
-    subsampled_output_root = os.path.join(base_dir, 'subsampled_swcs')
-
-    for agglo_id, swc_path in zip(_agglo_ids, _swc_paths):
-        healed_path = swc_path.replace('.swc', '_healed.swc')
-        mesh_path = f'{base_dir}/mesh/{agglo_id}.json'
-
-        html_filename = os.path.splitext(os.path.basename(healed_path))[0] + '.html'
+    for swc_path in swc_paths:
+        html_filename = os.path.splitext(os.path.basename(swc_path))[0] + '.html'
 
         plot_swc_3d_plotly(
-            [healed_path],
-            # mesh_paths=[mesh_path],
+            [swc_path],
             exclusion_radius=1,
-            color_mode='geodist',
+            color_mode='type',
             max_nodes=3000,
             subsample_factor=1,
             verbose=True,
@@ -417,5 +525,7 @@ if __name__ == "__main__":
             output_dir=html_output_root,
             save_subsampled=True,
             subsample_output_dir=subsampled_output_root,
+            prune_axon=prune_axon,
+            axon_type=2,
         )
 

@@ -6,4 +6,7 @@
 ssl_neuron/data/skeletons/
 ssl_neuron/ckpts
 ssl_neuron/ckpts_old
+ssl_neuron/ckpts_with_type/
+ssl_neuron/ckpts_*/
+*.pt
 ssl_neuron/data/cell_types/
