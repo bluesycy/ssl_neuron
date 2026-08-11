@@ -3,11 +3,12 @@
 *.egg-info/
 **/.ipynb_checkpoints/
 
-ssl_neuron/data/skeletons/
-ssl_neuron/ckpts
-ssl_neuron/ckpts_old
-ssl_neuron/ckpts_with_type/
-ssl_neuron/ckpts_*/
+# Checkpoints and datasets live on NFS under <skeleton root>/graphdino/, not here.
 *.pt
+ssl_neuron/ckpts/
+ssl_neuron/ckpts_*/
+ssl_neuron/data/skeletons/
 ssl_neuron/data/cell_types/
+ssl_neuron/logs/*.log
+
 ssl_neuron/demos/figures/tsne_interactive_with_type.html

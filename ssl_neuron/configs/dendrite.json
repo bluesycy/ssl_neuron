@@ -1,0 +1,38 @@
+{
+    "model": {
+        "num_classes": 1000,
+        "dim": 32,
+        "depth": 7,
+        "n_head": 8,
+        "pos_dim": 32,
+        "move_avg": 0.999,
+        "center_avg": 0.9,
+        "teacher_temp": 0.06
+    },
+    "data": {
+        "class": "roli",
+        "path": "/nfs/data8/chuyu/20230422_160839/connectome/skeletons/healed_syns_swc/graphdino/datasets/dendrite",
+        "n_nodes": 200,
+        "max_nodes": 1000,
+        "feat_dim": 7,
+        "use_type": true,
+        "batch_size": 64,
+        "num_workers": 6,
+        "jitter_var": 1,
+        "translate_var": 10,
+        "rotation_axis": "xyz",
+        "n_drop_branch": 10
+    },
+    "optimizer": {
+        "lr": 0.0001,
+        "max_iter": 100000,
+        "exp_decay": 0.5
+    },
+    "trainer": {
+        "ckpt_dir": "/nfs/data8/chuyu/20230422_160839/connectome/skeletons/healed_syns_swc/graphdino/ckpts/dendrite",
+        "save_ckpt_every": 500,
+        "seed": null
+    },
+    "variant": "dendrite",
+    "description": "GraphDINO on the soma + dendrites only, with type info"
+}

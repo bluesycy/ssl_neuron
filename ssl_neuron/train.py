@@ -81,7 +81,8 @@ class Trainer(object):
             losses.update(loss.detach(), n)
             self.curr_iter += 1
 
-        print('Epoch {} | Loss {:.4f}'.format(epoch, losses.avg))
+        # flush=True so redirected logs stay readable while training runs.
+        print('Epoch {} | Loss {:.4f}'.format(epoch, losses.avg), flush=True)
         return losses.avg
 
 
@@ -96,7 +97,7 @@ class Trainer(object):
             'loss': loss
         }
         torch.save(payload, path)
-        print('Save model after epoch {} as {}.'.format(epoch, filename))
+        print('Save model after epoch {} as {}.'.format(epoch, filename), flush=True)
 
 
     def _load_checkpoint(self, resume_path):

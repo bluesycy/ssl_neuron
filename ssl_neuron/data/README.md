@@ -1,20 +1,48 @@
-# Data Preprocessing
+# `data/` — dataset format and the upstream Allen pipeline
 
-To download the ABA dataset, use the [Allen Software Development Kit](http://alleninstitute.github.io/AllenSDK/cell_types.html). See [demo notebook](http://alleninstitute.github.io/AllenSDK/_static/examples/nb/cell_types.html#Cell-Morphology-Reconstructions) on how to use the Allen Cell Types Database.
+The connectome pipeline that this fork actually uses lives in
+[`../preprocessing/`](../preprocessing/README.md); its outputs go to NFS under
+`<skeleton root>/graphdino/datasets/<variant>/`, not into this directory. What
+remains here is `data_utils.py` (helpers shared with the upstream code) and this
+format spec.
 
-To get the rotation angles, download Dataset 3 from the Supplementary material of [Gouwens et al. (2019)](https://www.nature.com/articles/s41593-019-0417-0#Sec27). The column "upright_angle" contains the information to rotate the cell to vertical.
+The upstream Allen preprocessing notebooks and the superseded connectome notebooks are in
+[`../archive/notebooks/`](../archive/notebooks/).
 
-See [extract_allen_data.ipynb](https://github.com/marissaweis/ssl_neuron/blob/main/ssl_neuron/data/extract_allen_data.ipynb) for the preprocessing. To speed up training, one can additionally subsample the graphs offline to a smaller number of nodes, i.e. 1000.
+## Dataset format
 
+`config.data.path` must point at a directory laid out as:
 
-## Data Preprocessing for pretrained model
-The pretrained model ([checkpoint](https://github.com/marissaweis/ssl_neuron/blob/main/ssl_neuron/ckpts/)) was trained after the removal of the axons and centering each neuron such that the soma coordinate is (0, 0, 0). Only xyz-coordinates were used as node features.
+```
+<data.path>/
+├── skeletons/<cell_id>/features.npy    # (N, 8) float
+├── skeletons/<cell_id>/neighbors.pkl   # {node_idx: set(neighbour idx)}
+├── all_ids.npy
+├── train_ids.npy
+└── val_ids.npy
+```
 
+- **features.npy** — columns `0:3` soma-centred xyz in microns, column `3` radius (unused by the
+  model), columns `4:8` a `[soma, axon, dendrite, synapse]` one-hot. `datasets.py` reads
+  `[0,1,2]` when `data.use_type` is false and `[0,1,2,4,5,6,7]` when true.
+- **neighbors.pkl** — undirected adjacency over node indices `0..N-1`, where index `0` is the
+  soma. `datasets.py` hard-codes `soma_id = 0`.
+- Graphs must be a single connected component; `datasets.py` does not repair them.
 
-## Custom data
-To utilize GraphDINO with your custom data, you need to specify the directory where your dataset is stored in the config file. Within this directory, there should be a subdirectory named "skeletons". Each sample in your dataset should have its own folder within "skeletons", named after the sample ID. Each of these sample folders should contain two files:
+## Upstream ABA / Allen data
 
-1. "features.npy" - This file stores the node features in a numpy array format with dimensions (number of nodes x number of features).
-2. "neighbors.pkl" - This is a Python pickle file containing a dictionary that maps each node ID to the IDs of its neighboring nodes.
+To download the ABA dataset, use the
+[Allen Software Development Kit](http://alleninstitute.github.io/AllenSDK/cell_types.html). See the
+[demo notebook](http://alleninstitute.github.io/AllenSDK/_static/examples/nb/cell_types.html#Cell-Morphology-Reconstructions)
+on how to use the Allen Cell Types Database.
 
-Additionally, you'll need to provide lists of sample IDs designated for training and validation. These lists should be stored in files named "train_ids.npy" and "val_ids.npy", respectively, also located within the dataset directory.
+To get the rotation angles, download Dataset 3 from the Supplementary material of
+[Gouwens et al. (2019)](https://www.nature.com/articles/s41593-019-0417-0#Sec27); the column
+`upright_angle` contains the information to rotate the cell to vertical.
+
+`../archive/notebooks/extract_allen_data.ipynb` has the upstream preprocessing.
+
+### Pretrained upstream model
+
+The upstream pretrained checkpoint was trained after removing the axons and centering each neuron
+so the soma is at `(0, 0, 0)`, using only xyz coordinates as node features (`feat_dim=3`).

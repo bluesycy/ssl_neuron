@@ -29,6 +29,9 @@ class GraphDataset(Dataset):
         self.n_drop_branch = config['data']['n_drop_branch']
         self.translate_var = config['data']['translate_var']
         self.n_nodes = config['data']['n_nodes']
+        # Node budget each graph is contracted to once, at load time. The
+        # per-view augmentation then samples `n_nodes` out of these.
+        self.max_nodes = config['data'].get('max_nodes', 1000)
         # When True, keep the 4-dim one-hot type alongside xyz (radius is dropped).
         # Defaults to False to preserve backward compatibility with old checkpoints.
         self.use_type = config['data'].get('use_type', False)
@@ -53,9 +56,9 @@ class GraphDataset(Dataset):
             if len(features) >= self.n_nodes or self.inference:
                 
                 # Subsample graphs for faster processing during training.
-                neighbors, not_deleted = subsample_graph(neighbors=neighbors, 
-                                                         not_deleted=set(range(len(neighbors))), 
-                                                         keep_nodes=1000, 
+                neighbors, not_deleted = subsample_graph(neighbors=neighbors,
+                                                         not_deleted=set(range(len(neighbors))),
+                                                         keep_nodes=self.max_nodes,
                                                          protected=[soma_id])
                 # Remap neighbor indices to 0..999.
                 neighbors, subsampled2new = remap_neighbors(neighbors)
