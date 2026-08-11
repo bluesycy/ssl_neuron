@@ -10,3 +10,4 @@ ssl_neuron/ckpts_with_type/
 ssl_neuron/ckpts_*/
 *.pt
 ssl_neuron/data/cell_types/
+ssl_neuron/demos/figures/tsne_interactive_with_type.html
