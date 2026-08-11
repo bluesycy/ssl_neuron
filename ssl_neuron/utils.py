@@ -1,9 +1,17 @@
 import torch
 import numpy as np
-import seaborn as sns
-import matplotlib.pylab as plt
 from collections import defaultdict
 from scipy.spatial.transform import Rotation as R
+
+# seaborn/matplotlib are only needed by the plotting helpers below. Import them
+# lazily so the core graph/inference utilities remain usable in environments
+# where the plotting stack (or its pandas/numpy deps) is unavailable.
+try:
+    import seaborn as sns
+    import matplotlib.pylab as plt
+except Exception:  # pragma: no cover - plotting is optional
+    sns = None
+    plt = None
 
     
 class AverageMeter(object):
